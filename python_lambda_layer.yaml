@@ -1,0 +1,88 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template for creating a Lambda Layer from S3 bucket'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name (dev, staging, prod)
+  
+  S3BucketName:
+    Type: String
+    Description: Name of the S3 bucket containing the Lambda layer package
+    MinLength: 3
+    MaxLength: 63
+    ConstraintDescription: Must be a valid S3 bucket name
+  
+  S3ObjectKey:
+    Type: String
+    Description: S3 object key (path) to the Lambda layer zip file
+    Default: layers/my-layer.zip
+    ConstraintDescription: Must be a valid S3 object key ending with .zip
+  
+  LayerName:
+    Type: String
+    Description: Name for the Lambda layer
+    Default: my-lambda-layer
+    MinLength: 1
+    MaxLength: 64
+    AllowedPattern: '^[a-zA-Z0-9-_]+$'
+    ConstraintDescription: Must contain only letters, numbers, hyphens, and underscores
+  
+  LayerDescription:
+    Type: String
+    Description: Description for the Lambda layer
+    Default: Custom Lambda layer deployed from S3
+    MaxLength: 256
+  
+  CompatibleRuntimes:
+    Type: CommaDelimitedList
+    Description: Compatible Lambda runtimes for this layer
+    Default: "python3.9,python3.10,python3.11,python3.12"
+
+Resources:
+  LambdaLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: !Sub '${LayerName}-${Environment}'
+      Description: !Sub '${LayerDescription} - ${Environment}'
+      Content:
+        S3Bucket: !Ref S3BucketName
+        S3Key: !Ref S3ObjectKey
+      CompatibleRuntimes: !Ref CompatibleRuntimes
+      LicenseInfo: MIT
+
+  # Optional: Lambda Layer Permission to make it publicly accessible
+  # Remove this resource if you want to keep the layer private
+  LambdaLayerPermission:
+    Type: AWS::Lambda::LayerVersionPermission
+    Properties:
+      LayerVersionArn: !Ref LambdaLayer
+      Action: lambda:GetLayerVersion
+      Principal: '*'
+      Condition:
+        StringEquals:
+          'aws:PrincipalTag/Environment': !Ref Environment
+
+Outputs:
+  LayerArn:
+    Description: ARN of the created Lambda Layer
+    Value: !Ref LambdaLayer
+    Export:
+      Name: !Sub '${AWS::StackName}-LayerArn'
+  
+  LayerVersion:
+    Description: Version number of the Lambda Layer
+    Value: !GetAtt LambdaLayer.Version
+    Export:
+      Name: !Sub '${AWS::StackName}-LayerVersion'
+  
+  LayerName:
+    Description: Name of the Lambda Layer
+    Value: !Sub '${LayerName}-${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-LayerName'
